@@ -83,7 +83,7 @@ DATABASES = {
         'PASSWORD': 'admin',
         'NAME': 'restaurants_api',
         'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"
+            'init_command':"SET sql_mode='STRICT_TRANS_TABLES'"
         }
     }
 }
