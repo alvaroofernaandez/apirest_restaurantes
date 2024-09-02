@@ -14,14 +14,14 @@ class RestaurantView(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self, requestm, id=0):
+    def get(self, request, id=0):
         if (id>0):
             restaurantes = list(Restaurante.objects.filter(id=id).values())
             if len(restaurantes) > 0:
                 restaurante = restaurantes[0]
                 datos={'message': "Restaurantes encontrados!", 'restaurantes': restaurantes}
             else:
-                datos = {'message': "Restaurants not found :( ..."}
+                datos = {'message': "Restaurants not found..."}
             return JsonResponse(datos)
         else:
             restaurantes = list(Restaurante.objects.values())
