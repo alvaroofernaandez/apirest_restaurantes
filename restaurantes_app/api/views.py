@@ -3,6 +3,8 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from .models import Restaurante
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
 import json
 
 
@@ -60,3 +62,78 @@ class RestaurantView(View):
         else:
             datos = {'message': "Restaurants not found..."}
         return JsonResponse(datos)
+
+# LOGIN, USUARIOS, ETC
+
+class UserManagementView(View):
+
+    def get(self, request, id=0):
+        if id:
+            user = User.objects.filter(id=id).first()
+            if user:
+                user_data = {'id': user.id, 'username': user.username, 'email': user.email}
+                datos = {'message': "Usuario encontrado!", 'user': user_data}
+            else:
+                datos = {'message': "Usuario no encontrado."}
+        else:
+            users = list(User.objects.values('id', 'username', 'email'))
+            datos = {'message': "Usuarios encontrados!", 'users': users}
+        return JsonResponse(datos)
+
+    def post(self, request):
+        jd=json.loads(request.body)
+        try:
+            user = User.objects.create_user(username=jd['username'], password=jd['password'], email=jd['email'])
+            datos = {'message': 'Usuario creado con éxito.'}
+        except Exception as e:
+            datos = {'message': str(e)}
+        return JsonResponse(datos)
+
+    def put(self, request, id):
+        jd = json.loads(request.body)
+        user = User.objects.filter(id=id).first()
+        if user:
+            user.username = jd.get('username', user.username)
+            user.email = jd.get('email', user.email)
+            if 'password' in jd:
+                user.set_password(jd['password'])
+            user.save()
+            datos = {'message': "Usuario editado con éxito."}
+            return JsonResponse(datos)
+        else:
+            datos = {'message': "Usuario no encontrado."}
+        return JsonResponse(datos)
+
+
+    def delete(self, request, id):
+        user = User.objects.filter(id=id).first()
+        if user:
+            user.delete()
+            datos = {'message': 'Usuario eliminado con éxito'}
+        else:
+            datos = {'message': 'Usuario no encontrado.'}
+        return JsonResponse(datos)
+
+class UserLoginView(View):
+
+    def post(self, request):
+        jd = json.loads(request.body)
+        username = jd['username']
+        password = jd['password']
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            datos = {'message': 'Log in realizado con éxito.'}
+            return JsonResponse(datos)
+        else:
+            datos = {'message': 'Credenciales inválidas.'}
+        return JsonResponse(datos)
+
+class UserLogoutView(View):
+
+    def post(self, request):
+        logout(request)
+        datos = {'message': 'Log out realizado con éxito, hasta pronto.'}
+        return JsonResponse(datos)
+
+
