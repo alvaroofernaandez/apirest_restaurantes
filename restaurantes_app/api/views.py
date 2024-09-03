@@ -1,69 +1,78 @@
+from functools import wraps
+import jwt
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from .models import Restaurante
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, logout
 from django.contrib.auth.models import User
+from .jwt_utils import create_jwt
 import json
 
 
-# Aquí crearemos la vista:
+def jwt_required(view_func):
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        auth = request.META.get('HTTP_AUTHORIZATION', None)
+        if auth is None:
+            return JsonResponse({'message': "No se proporcionó el token."})
+        try:
+            token = auth.split(" ")[1]  # En el header hay que poner Authorization : Bearer (token)
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            request.user_id = payload['user_id']  # Almacena el ID del usuario en el objeto request
+        except jwt.ExpiredSignatureError:
+            return JsonResponse({'message': "El token ha expirado."})
+        except jwt.InvalidTokenError:
+            return JsonResponse({'message': "El token es inválido."})
+        return view_func(request, *args, **kwargs)
+    return _wrapped_view
+
 
 class RestaurantView(View):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
-
     def get(self, request, id=0):
-        if (id>0):
+        if id > 0:
             restaurantes = list(Restaurante.objects.filter(id=id).values())
-            if len(restaurantes) > 0:
-                restaurante = restaurantes[0]
-                datos={'message': "Restaurantes encontrados!", 'restaurantes': restaurantes}
+            if restaurantes:
+                return JsonResponse({'message': "Restaurantes encontrados!", 'restaurantes': restaurantes})
             else:
-                datos = {'message': "Restaurants not found..."}
-            return JsonResponse(datos)
+                return JsonResponse({'message': "Restaurants not found..."})
         else:
             restaurantes = list(Restaurante.objects.values())
-            if len(restaurantes)>0:
-                datos={'message': "Restaurantes encontrados!", 'restaurantes': restaurantes}
-            else:
-                datos={'message': "Restaurants not found."}
-            return JsonResponse(datos)
+            return JsonResponse({'message': "Restaurantes encontrados!",
+                                 'restaurantes': restaurantes}) if restaurantes else JsonResponse(
+                {'message': "Restaurants not found."})
 
     def post(self, request):
         jd = json.loads(request.body)
-        Restaurante.objects.create(name=jd['name'],web=jd['web'],yearFoundation=jd['yearFoundation'])
-        datos={'message': "Restaurante añadido con éxito."}
-        return JsonResponse(datos)
-
+        Restaurante.objects.create(name=jd['name'], web=jd['web'], yearFoundation=jd['yearFoundation'])
+        return JsonResponse({'message': "Restaurante añadido con éxito."})
 
     def put(self, request, id):
         jd = json.loads(request.body)
-        restaurantes = list(Restaurante.objects.filter(id=id).values())
-        if len(restaurantes) > 0:
-            restaurante = Restaurante.objects.get(id=id)
-            restaurante.name=jd['name']
-            restaurante.web=jd['web']
-            restaurante.yearFoundation=jd['yearFoundation']
+        restaurante = Restaurante.objects.filter(id=id).first()
+        if restaurante:
+            restaurante.name = jd['name']
+            restaurante.web = jd['web']
+            restaurante.yearFoundation = jd['yearFoundation']
             restaurante.save()
-            datos = {'message': "Restaurante editado con éxito."}
+            return JsonResponse({'message': "Restaurante editado con éxito."})
         else:
-            datos = {'message': "Restaurants not found..."}
-        return JsonResponse(datos)
+            return JsonResponse({'message': "Restaurants not found..."})
 
     def delete(self, request, id):
-        restaurantes = list(Restaurante.objects.filter(id=id).values())
-        if len(restaurantes) > 0:
-            Restaurante.objects.filter(id=id).delete()
-            datos = {'message': "Restaurante eliminado."}
+        restaurante = Restaurante.objects.filter(id=id).first()
+        if restaurante:
+            restaurante.delete()
+            return JsonResponse({'message': "Restaurante eliminado."})
         else:
-            datos = {'message': "Restaurants not found..."}
-        return JsonResponse(datos)
+            return JsonResponse({'message': "Restaurants not found..."})
 
-# LOGIN, USUARIOS, ETC
 
 class UserManagementView(View):
 
@@ -72,22 +81,20 @@ class UserManagementView(View):
             user = User.objects.filter(id=id).first()
             if user:
                 user_data = {'id': user.id, 'username': user.username, 'email': user.email}
-                datos = {'message': "Usuario encontrado!", 'user': user_data}
+                return JsonResponse({'message': "Usuario encontrado!", 'user': user_data})
             else:
-                datos = {'message': "Usuario no encontrado."}
+                return JsonResponse({'message': "Usuario no encontrado."})
         else:
             users = list(User.objects.values('id', 'username', 'email'))
-            datos = {'message': "Usuarios encontrados!", 'users': users}
-        return JsonResponse(datos)
+            return JsonResponse({'message': "Usuarios encontrados!", 'users': users})
 
     def post(self, request):
-        jd=json.loads(request.body)
+        jd = json.loads(request.body)
         try:
             user = User.objects.create_user(username=jd['username'], password=jd['password'], email=jd['email'])
-            datos = {'message': 'Usuario creado con éxito.'}
+            return JsonResponse({'message': 'Usuario creado con éxito.'})
         except Exception as e:
-            datos = {'message': str(e)}
-        return JsonResponse(datos)
+            return JsonResponse({'message': str(e)})
 
     def put(self, request, id):
         jd = json.loads(request.body)
@@ -98,21 +105,18 @@ class UserManagementView(View):
             if 'password' in jd:
                 user.set_password(jd['password'])
             user.save()
-            datos = {'message': "Usuario editado con éxito."}
-            return JsonResponse(datos)
+            return JsonResponse({'message': "Usuario editado con éxito."})
         else:
-            datos = {'message': "Usuario no encontrado."}
-        return JsonResponse(datos)
-
+            return JsonResponse({'message': "Usuario no encontrado."})
 
     def delete(self, request, id):
         user = User.objects.filter(id=id).first()
         if user:
             user.delete()
-            datos = {'message': 'Usuario eliminado con éxito'}
+            return JsonResponse({'message': 'Usuario eliminado con éxito'})
         else:
-            datos = {'message': 'Usuario no encontrado.'}
-        return JsonResponse(datos)
+            return JsonResponse({'message': 'Usuario no encontrado.'})
+
 
 class UserLoginView(View):
 
@@ -122,18 +126,34 @@ class UserLoginView(View):
         password = jd['password']
         user = authenticate(request, username=username, password=password)
         if user is not None:
-            login(request, user)
-            datos = {'message': 'Log in realizado con éxito.'}
-            return JsonResponse(datos)
+            token = create_jwt(user)
+            return JsonResponse({'token': token})
         else:
-            datos = {'message': 'Credenciales inválidas.'}
-        return JsonResponse(datos)
+            return JsonResponse({'message': 'Credenciales inválidas.'})
+
 
 class UserLogoutView(View):
 
     def post(self, request):
         logout(request)
-        datos = {'message': 'Log out realizado con éxito, hasta pronto.'}
-        return JsonResponse(datos)
+        return JsonResponse({'message': 'Log out realizado con éxito, hasta pronto.'})
 
 
+class UserProfileView(View):
+
+    @method_decorator(jwt_required)
+    def get(self, request):
+        try:
+            user_id = request.user_id
+            user = User.objects.filter(id=user_id).first()
+
+            if user is None:
+                return JsonResponse({'message': "Usuario no encontrado."})
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+            }
+            return JsonResponse({'message': "Datos del usuario.", 'user': user_data})
+        except Exception as e:
+            return JsonResponse({'error': str(e)})
