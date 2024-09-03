@@ -9,6 +9,7 @@ API Python/Django para gestionar información de restaurantes: menús, pedidos, 
   - Python
   - Django
   - MySQL
+  - JWT
     
 ## Documentación 📚
 
