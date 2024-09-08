@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 def create_jwt(user):
     payload = {
         'user_id': user.id,
-        'exp': datetime.utcnow() + timedelta(days=1),  # Expira en 1 día
+        'exp': datetime.utcnow() + timedelta(hours=2),  # Expira en 2 horas
         'iat': datetime.utcnow()  # Tiempo en el que se emitió el token
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
