@@ -7,7 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from .models import Restaurante
 from django.contrib.auth import authenticate, logout
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from .jwt_utils import create_jwt
 import json
 
@@ -19,15 +19,28 @@ def jwt_required(view_func):
         if auth is None:
             return JsonResponse({'message': "No se proporcionó el token."})
         try:
-            token = auth.split(" ")[1]  # En el header hay que poner Authorization : Bearer (token)
+            token = auth.split(" ")[1]
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-            request.user_id = payload['user_id']  # Almacena el ID del usuario en el objeto request
+            request.user_id = payload['user_id']
         except jwt.ExpiredSignatureError:
             return JsonResponse({'message': "El token ha expirado."})
         except jwt.InvalidTokenError:
             return JsonResponse({'message': "El token es inválido."})
         return view_func(request, *args, **kwargs)
+
     return _wrapped_view
+
+
+def role_required(role):
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            user = User.objects.get(id=request.user_id)
+            if not user.groups.filter(name=role).exists():
+                return JsonResponse({'message': "No tienes permiso para realizar esta acción."}, status=403)
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator
 
 
 class RestaurantView(View):
@@ -35,6 +48,8 @@ class RestaurantView(View):
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
+
+    @method_decorator(jwt_required)
     def get(self, request, id=0):
         if id > 0:
             restaurantes = list(Restaurante.objects.filter(id=id).values())
@@ -48,11 +63,15 @@ class RestaurantView(View):
                                  'restaurantes': restaurantes}) if restaurantes else JsonResponse(
                 {'message': "Restaurants not found."})
 
+    @method_decorator(jwt_required)
+    @method_decorator(role_required('admins'))
     def post(self, request):
         jd = json.loads(request.body)
         Restaurante.objects.create(name=jd['name'], web=jd['web'], yearFoundation=jd['yearFoundation'])
         return JsonResponse({'message': "Restaurante añadido con éxito."})
 
+    @method_decorator(jwt_required)
+    @method_decorator(role_required('admins'))
     def put(self, request, id):
         jd = json.loads(request.body)
         restaurante = Restaurante.objects.filter(id=id).first()
@@ -65,6 +84,8 @@ class RestaurantView(View):
         else:
             return JsonResponse({'message': "Restaurants not found..."})
 
+    @method_decorator(jwt_required)
+    @method_decorator(role_required('admins'))
     def delete(self, request, id):
         restaurante = Restaurante.objects.filter(id=id).first()
         if restaurante:
@@ -76,11 +97,18 @@ class RestaurantView(View):
 
 class UserManagementView(View):
 
+    @method_decorator(jwt_required)
+    @method_decorator(role_required('admins'))
     def get(self, request, id=0):
         if id:
             user = User.objects.filter(id=id).first()
             if user:
-                user_data = {'id': user.id, 'username': user.username, 'email': user.email}
+                user_data = {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'role': list(user.groups.values_list('name', flat=True)),
+                }
                 return JsonResponse({'message': "Usuario encontrado!", 'user': user_data})
             else:
                 return JsonResponse({'message': "Usuario no encontrado."})
@@ -92,10 +120,21 @@ class UserManagementView(View):
         jd = json.loads(request.body)
         try:
             user = User.objects.create_user(username=jd['username'], password=jd['password'], email=jd['email'])
+
+            role = jd.get('role', 'user')
+            if role == 'admin':
+                group, created = Group.objects.get_or_create(name='admins')
+                user.groups.add(group)
+            else:
+                group, created = Group.objects.get_or_create(name='users')
+                user.groups.add(group)
+
             return JsonResponse({'message': 'Usuario creado con éxito.'})
         except Exception as e:
             return JsonResponse({'message': str(e)})
 
+    @method_decorator(jwt_required)
+    @method_decorator(role_required('admins'))
     def put(self, request, id):
         jd = json.loads(request.body)
         user = User.objects.filter(id=id).first()
@@ -109,6 +148,8 @@ class UserManagementView(View):
         else:
             return JsonResponse({'message': "Usuario no encontrado."})
 
+    @method_decorator(jwt_required)
+    @method_decorator(role_required('admins'))
     def delete(self, request, id):
         user = User.objects.filter(id=id).first()
         if user:
