@@ -7,6 +7,7 @@ API Python/Django para gestionar información de restaurantes: menús, pedidos, 
 ## Implementaciones recientes: ➕
   - API REST para Users, y su correspondiente autentificación (Log in/Log out)
   - JWT como capa de seguridad.
+  - Roles user y admin con permisos distintos.
 
 ## Tecnologías 🖲️
 
