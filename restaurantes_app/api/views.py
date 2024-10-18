@@ -49,7 +49,7 @@ class RestaurantView(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    @method_decorator(jwt_required)
+    #@method_decorator(jwt_required)
     def get(self, request, id=0):
         if id > 0:
             restaurantes = list(Restaurante.objects.filter(id=id).values())
@@ -63,15 +63,15 @@ class RestaurantView(View):
                                  'restaurantes': restaurantes}) if restaurantes else JsonResponse(
                 {'message': "Restaurants not found."})
 
-    @method_decorator(jwt_required)
-    @method_decorator(role_required('admins'))
+    #@method_decorator(jwt_required)
+    #@method_decorator(role_required('admins'))
     def post(self, request):
         jd = json.loads(request.body)
         Restaurante.objects.create(name=jd['name'], web=jd['web'], yearFoundation=jd['yearFoundation'])
         return JsonResponse({'message': "Restaurante añadido con éxito."})
 
-    @method_decorator(jwt_required)
-    @method_decorator(role_required('admins'))
+    #@method_decorator(jwt_required)
+    #@method_decorator(role_required('admins'))
     def put(self, request, id):
         jd = json.loads(request.body)
         restaurante = Restaurante.objects.filter(id=id).first()
@@ -84,8 +84,8 @@ class RestaurantView(View):
         else:
             return JsonResponse({'message': "Restaurants not found..."})
 
-    @method_decorator(jwt_required)
-    @method_decorator(role_required('admins'))
+    #@method_decorator(jwt_required)
+    #@method_decorator(role_required('admins'))
     def delete(self, request, id):
         restaurante = Restaurante.objects.filter(id=id).first()
         if restaurante:
